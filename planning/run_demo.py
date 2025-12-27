@@ -34,7 +34,7 @@ from simulation.scenarios import (
 DEFAULT_BOUNDS = (0.0, 500.0, 0.0, 500.0)
 SPAWN_BOUNDS = (0.0, 250.0, 0.0, 250.0)
 TARGET_XY = np.array([240.0, 240.0])
-DEFAULT_DRONE_POS = np.array([[-20, -36]])
+DEFAULT_DRONE_POS = np.array([[-20.0, -36.0]])
 
 
 # -----------------------------------------------------------------------------
@@ -204,7 +204,6 @@ if __name__ == "__main__":
     drone_xy = DEFAULT_DRONE_POS
     target_xy = TARGET_XY
 
-    # Create example polygon obstacles
     obstacles_polygons = None
     if args.obstacles:
         # Rectangle
@@ -234,7 +233,6 @@ if __name__ == "__main__":
 
         obstacles_polygons = [rect]
 
-    # Initialize World
     W = world.World(
         sheep_xy,
         drone_xy,

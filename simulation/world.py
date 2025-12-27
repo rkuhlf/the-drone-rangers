@@ -58,11 +58,9 @@ class World:
         shepherd_xy: np.ndarray,  # n-by-2 of the positions of all of the shepherds.
         target_xy: list[float] | None = None,
         *,
-        # Geometry
         ra: float = 4.0,  # Agent-agent repulsion radius
         rs: float = 65.0,  # Shepherd detection radius
         k_nn: int = 19,  # Nearest neighbors count
-        # Timing & Speeds
         dt: float = 0.07,
         vmax: float = 1.0,  # Max agent speed
         umax: float = 1.5,  # Max controller speed
@@ -75,7 +73,7 @@ class World:
         w_align: float = 0.0,  # Alignment weight
         # Grazing / Noise
         sigma: float = 0.3,  # Noise magnitude
-        graze_p: float = 0.05,  # Grazing movement probability
+        graze_p: float = 0.05,  # Grazing movement probability.
         # Boundaries
         boundary: str = "none",
         bounds: tuple[float, float, float, float] = DEFAULT_BOUNDS,
@@ -850,10 +848,7 @@ class World:
 
         V_new = np.zeros((self.N, 2))
         for i in range(self.N):
-            rnd = self.rng.normal(size=2) * 0.2
-            R = self._repel_close_vec(i)
-            H = self.wr * R + rnd
-
+            H = self.wr * self._repel_close_vec(i)
             h = norm(H)
 
             # Obstacle handling for far sheep
@@ -872,6 +867,10 @@ class World:
                 H += self.w_tan * tng_f
 
             H += (0.5 * self.w_obs) * nrm_f
+            
+            if np.random.uniform(0, 1) < self.graze_p:
+                noise = self.sigma * self.rng.normal(size=2)
+                H += noise
 
             if s_far[0] <= self.keep_out:
                 n_unit = nrm_f
@@ -969,11 +968,6 @@ class World:
                 if into < 0.0:
                     H = H - into * n_unit
 
-            noise = self.sigma * np.sqrt(self.dt) * self.rng.normal(size=2)
-            if vel_norm > 0.3 * self.vmax:
-                noise *= 0.5
-            H = H + noise
-
             h_sq = np.sum(H**2)
             if h_sq > 0:
                 h_norm = np.sqrt(h_sq)
@@ -982,10 +976,7 @@ class World:
             else:
                 h = np.zeros(2)
 
-            v_des = h * self.vmax
-
-            smoothing = 0.8
-            V_new[i] = smoothing * self.V[i] + (1.0 - smoothing) * v_des
+            V_new[i] = h * self.vmax
 
         return V_new
 

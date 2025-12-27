@@ -1210,7 +1210,8 @@ if __name__ == "__main__":
                             center=backend_adapter.target, radius=radius
                         )
 
-                t = backend_adapter.t if hasattr(backend_adapter, "t") else 0.0
+                # TODO: Move .t out of the backend_adapter, since this is the only place that uses it.
+                t = backend_adapter.t
                 fN = policy.fN if hasattr(policy, "fN") else 50.0
 
                 collector.record_step(world_state, target, t, fN)
