@@ -5,6 +5,7 @@ This module defines the core data structures representing the state of the simul
 including the flock, drones, obstacles, and active jobs. It serves as the data contract
 between the simulation engine, the planner, and the API.
 """
+
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -17,16 +18,20 @@ import numpy as np
 # -----------------------------------------------------------------------------
 
 JobStatus = Literal["pending", "scheduled", "running", "completed", "cancelled"]
-MaintainUntil = Union[Literal["target_is_reached"], float]  # "target_is_reached" or UNIX timestamp
+MaintainUntil = Union[
+    Literal["target_is_reached"], float
+]  # "target_is_reached" or UNIX timestamp
 
 
 # -----------------------------------------------------------------------------
 # Geometry Primitives
 # -----------------------------------------------------------------------------
 
+
 @dataclass
 class Circle:
     """Represents a circular target or zone."""
+
     center: np.ndarray
     radius: Optional[float]
 
@@ -41,6 +46,7 @@ class Circle:
 @dataclass
 class Polygon:
     """Represents a polygonal target or zone (e.g., a pen)."""
+
     points: np.ndarray
 
     def to_dict(self) -> dict:
@@ -57,12 +63,14 @@ Target = Union[Circle, Polygon]
 # Job State
 # -----------------------------------------------------------------------------
 
+
 @dataclass
 class Job:
     """
     Represents a high-level task for the herding system (e.g., "move flock to X").
     Tracks lifecycle, scheduling, and progress.
     """
+
     # Core configuration
     target: Optional[Target]
     drone_count: int
@@ -70,31 +78,35 @@ class Job:
 
     # Status & Progress
     status: JobStatus  # "pending", "scheduled", "running", "completed", "cancelled"
-    is_active: bool    # If the user pauses a job, this becomes false.
-    remaining_time: Optional[float] # Estimate of seconds remaining
+    is_active: bool  # If the user pauses a job, this becomes false.
+    remaining_time: Optional[float]  # Estimate of seconds remaining
 
     # Scheduling
-    start_at: Optional[float]      # UNIX timestamp; None = immediate
+    start_at: Optional[float]  # UNIX timestamp; None = immediate
     completed_at: Optional[float]  # UNIX timestamp; None = not completed
-    
+
     # Termination condition:
     # - "target_is_reached": maintain until target condition is satisfied
     # - float: maintain until this UNIX timestamp
     maintain_until: MaintainUntil
-    
+
     # Metadata
     created_at: float  # UNIX timestamp
     updated_at: float  # UNIX timestamp
     id: uuid.UUID = field(default_factory=uuid.uuid4)
-    
+
     def to_dict(self) -> dict:
         """Convert job state to a dictionary for API response."""
-        
+
         def ts_to_iso(ts: Optional[float]) -> Optional[str]:
             if ts is None:
                 return None
-            return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat().replace("+00:00", "Z")
-        
+            return (
+                datetime.fromtimestamp(ts, tz=timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z")
+            )
+
         def maintain_until_to_dict(mu: MaintainUntil) -> str:
             if mu == "target_is_reached":
                 return "target_is_reached"
@@ -102,9 +114,9 @@ class Job:
                 # mu is a float timestamp here
                 result = ts_to_iso(mu)
                 return result if result is not None else ""
-        
-        drone_count_value = getattr(self, 'drone_count', 1)
-        
+
+        drone_count_value = getattr(self, "drone_count", 1)
+
         return {
             "id": str(self.id),
             "target": self.target.to_dict() if self.target is not None else None,
@@ -125,24 +137,26 @@ class Job:
 # World State
 # -----------------------------------------------------------------------------
 
+
 @dataclass
 class State:
     """
     Snapshot of the entire simulation state at a specific time step.
     Includes agent positions, drone positions, obstacles, and active jobs.
     """
+
     # n-by-2 array of sheep positions
     flock: np.ndarray
-    
+
     # n-by-2 array of drone positions
     drones: np.ndarray
-    
+
     # List of polygon obstacles, each is an (m,2) array of vertices
     polygons: List[np.ndarray]
-    
+
     # Active jobs
     jobs: List[Job]
-    
+
     def to_dict(self) -> dict:
         """Convert world state to a dictionary for API response."""
         return {

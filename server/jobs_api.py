@@ -5,6 +5,7 @@ This module handles the creation, management, and persistence of simulation jobs
 It provides a REST API for the frontend to interact with jobs and a repository
 layer for data persistence.
 """
+
 from __future__ import annotations
 
 import pickle
@@ -13,7 +14,6 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple
-from uuid import uuid4
 
 import time
 
@@ -37,6 +37,7 @@ VALID_STATUSES = {"pending", "scheduled", "running", "completed", "cancelled"}
 # Helpers
 # -----------------------------------------------------------------------------
 
+
 def _parse_iso_timestamp(s: Optional[str]) -> Optional[float]:
     """Parse ISO 8601 timestamp string to UNIX timestamp."""
     if not s:
@@ -51,7 +52,9 @@ def _timestamp_to_iso(ts: Optional[float]) -> Optional[str]:
     """Convert UNIX timestamp to ISO 8601 string with Z suffix."""
     if ts is None:
         return None
-    return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    return (
+        datetime.fromtimestamp(ts, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    )
 
 
 def _normalize_target(data: dict) -> Tuple[Optional[state.Target], Optional[str]]:
@@ -62,14 +65,20 @@ def _normalize_target(data: dict) -> Tuple[Optional[state.Target], Optional[str]
     target = data["target"]
     if target["type"] == "circle":
         radius = float(target["radius"]) if target["radius"] is not None else None
-        return state.Circle(
-            center=np.asarray(target["center"], dtype=float).reshape(2),
-            radius=radius
-        ), None
+        return (
+            state.Circle(
+                center=np.asarray(target["center"], dtype=float).reshape(2),
+                radius=radius,
+            ),
+            None,
+        )
     elif target["type"] == "polygon":
-        return state.Polygon(
-            points=np.asarray(target["points"], dtype=float).reshape(2, -1)
-        ), None
+        return (
+            state.Polygon(
+                points=np.asarray(target["points"], dtype=float).reshape(2, -1)
+            ),
+            None,
+        )
     else:
         return None, "Invalid target type"
 
@@ -95,16 +104,19 @@ def _normalize_drone_count(data: dict) -> Tuple[int, Optional[str]]:
 def _normalize_status(status: str) -> Tuple[JobStatus, Optional[str]]:
     """Normalize status from frontend format to internal format."""
     if status not in VALID_STATUSES:
-        return "pending", f"Invalid status: {status}. Must be one of: {', '.join(VALID_STATUSES)}"
+        return (
+            "pending",
+            f"Invalid status: {status}. Must be one of: {', '.join(VALID_STATUSES)}",
+        )
 
-    return status, None
+    return status, None  # type: ignore
 
 
 def decide_initial_status(
     start_at_ts: Optional[float],
     activate_immediately: bool,
     has_target: bool,
-    now_ts: float
+    now_ts: float,
 ) -> Tuple[JobStatus, bool]:
     """
     Centralized logic to determine initial status and is_active for a new job.
@@ -131,10 +143,11 @@ def _sync_remaining_time_from_memory(db_job: Job, jobs_cache) -> None:
 # Job Repository
 # -----------------------------------------------------------------------------
 
+
 class JobRepo:
     """
     Repository for persisting and retrieving jobs from PKL.
-    
+
     Every method starts by loading the jobs from the database and ends by saving
     the jobs back to the database if they've been modified.
     """
@@ -149,12 +162,19 @@ class JobRepo:
         try:
             with open(DB_PATH, "rb") as f:
                 jobs = pickle.load(f)
-        except (pickle.UnpicklingError, EOFError, AttributeError, ImportError, IndexError) as e:
+        except (
+            pickle.UnpicklingError,
+            EOFError,
+            AttributeError,
+            ImportError,
+            IndexError,
+        ) as e:
             print(f"Warning: Corrupt job database found at {DB_PATH}: {e}")
             # Backup corrupt file
             backup_path = f"{DB_PATH}.corrupt.{int(time.time())}"
             try:
                 import shutil
+
                 shutil.copy(DB_PATH, backup_path)
                 print(f"Backed up corrupt database to {backup_path}")
             except Exception:
@@ -164,10 +184,14 @@ class JobRepo:
         valid_jobs = []
         invalid_count = 0
         for job in jobs:
-            if job.target is None or isinstance(job.target, (state.Circle, state.Polygon)):
+            if job.target is None or isinstance(
+                job.target, (state.Circle, state.Polygon)
+            ):
                 valid_jobs.append(job)
             else:
-                print(f"Warning: Removing job {job.id} with invalid target type: {type(job.target)}")
+                print(
+                    f"Warning: Removing job {job.id} with invalid target type: {type(job.target)}"
+                )
                 invalid_count += 1
 
         # If we removed any invalid jobs, save the cleaned list back to disk
@@ -195,7 +219,7 @@ class JobRepo:
         """Create a new job in the database."""
         jobs = self._load_jobs()
         now = datetime.now(timezone.utc).timestamp()
-        
+
         new_job = Job(
             id=uuid.uuid4(),
             target=target,
@@ -241,13 +265,13 @@ class JobRepo:
             if j.id == job_id:
                 job = j
                 break
-        
+
         if job is None:
             return None
 
         for k, v in fields.items():
             setattr(job, k, v)
-        
+
         job.updated_at = datetime.now(timezone.utc).timestamp()
         self._save_jobs(jobs)
         return job
@@ -260,7 +284,7 @@ class JobRepo:
         jobs = self._load_jobs()
         original_count = len(jobs)
         jobs = [j for j in jobs if j.id != job_id]
-        
+
         if len(jobs) < original_count:
             self._save_jobs(jobs)
             return True
@@ -285,7 +309,7 @@ def get_repo() -> JobRepo:
 def sync_job_status_to_db(job: Job) -> None:
     """
     Sync a job's status, is_active, completed_at, and remaining_time to the database.
-    
+
     This is called from the main loop when jobs are promoted or completed.
     It updates status-related fields and remaining_time for recovery.
     """
@@ -304,10 +328,11 @@ def sync_job_status_to_db(job: Job) -> None:
 # API Blueprint Factory
 # -----------------------------------------------------------------------------
 
+
 def create_jobs_blueprint(world_lock, jobs_cache, get_backend_adapter) -> Blueprint:
     """
     Factory to create a unified jobs API blueprint.
-    
+
     Args:
         world_lock: Thread lock for world access
         jobs_cache: In-memory job cache
@@ -334,13 +359,18 @@ def create_jobs_blueprint(world_lock, jobs_cache, get_backend_adapter) -> Bluepr
         job_type = data.get("job_type", "immediate")
         scheduled_time = data.get("scheduled_time") or data.get("start_at")
         activate_immediately = job_type == "immediate"
-        
+
         # Parse scheduled_time if provided
         start_at = None
         if job_type == "scheduled" or scheduled_time:
             start_at = _parse_iso_timestamp(scheduled_time)
             if start_at is None and job_type == "scheduled":
-                return jsonify({"error": "scheduled_time must be provided for scheduled jobs"}), 400
+                return (
+                    jsonify(
+                        {"error": "scheduled_time must be provided for scheduled jobs"}
+                    ),
+                    400,
+                )
 
         # Determine status and activation using centralized logic
         now = datetime.now(timezone.utc).timestamp()
@@ -348,9 +378,9 @@ def create_jobs_blueprint(world_lock, jobs_cache, get_backend_adapter) -> Bluepr
             start_at_ts=start_at,
             activate_immediately=activate_immediately,
             has_target=(target is not None),
-            now_ts=now
+            now_ts=now,
         )
-        
+
         # Validation: is_active=True requires a target
         if is_active and target is None:
             return jsonify({"error": "Cannot activate job without a target"}), 400
@@ -365,17 +395,19 @@ def create_jobs_blueprint(world_lock, jobs_cache, get_backend_adapter) -> Bluepr
                 start_at=start_at,
                 scenario_id=data.get("scenario_id"),
             )
-            
+
             jobs_cache.add(job)
-            
+
             # If activated immediately, start metrics
             if is_active:
                 from server.metrics import start_metrics_run, get_collector
+
                 # Stop existing if any
                 if get_collector().get_current_run() is not None:
                     from server.metrics import end_metrics_run
+
                     end_metrics_run()
-                
+
                 start_metrics_run(str(job.id))
                 print(f"Started metrics collection for new job {job.id}")
 
@@ -418,10 +450,15 @@ def create_jobs_blueprint(world_lock, jobs_cache, get_backend_adapter) -> Bluepr
             for db_job in db_jobs:
                 _sync_remaining_time_from_memory(db_job, jobs_cache)
 
-        return jsonify({
-            "jobs": [j.to_dict() for j in db_jobs],
-            "total": len(db_jobs),
-        }), 200
+        return (
+            jsonify(
+                {
+                    "jobs": [j.to_dict() for j in db_jobs],
+                    "total": len(db_jobs),
+                }
+            ),
+            200,
+        )
 
     @bp.route("/jobs/<job_id>", methods=["GET"])
     def get_job(job_id):
@@ -436,7 +473,7 @@ def create_jobs_blueprint(world_lock, jobs_cache, get_backend_adapter) -> Bluepr
         if job is None:
             with world_lock:
                 job = jobs_cache.get(job_id_uuid)
-        
+
         if job is None:
             return jsonify({"error": f"Job {job_id} not found"}), 404
 
@@ -491,7 +528,10 @@ def create_jobs_blueprint(world_lock, jobs_cache, get_backend_adapter) -> Bluepr
         if "start_at" in data:
             start_at = _parse_iso_timestamp(data["start_at"])
             if start_at is None:
-                return jsonify({"error": "start_at must be provided for scheduled jobs"}), 400
+                return (
+                    jsonify({"error": "start_at must be provided for scheduled jobs"}),
+                    400,
+                )
             updates_db["start_at"] = start_at
             updates_mem["start_at"] = start_at
 
@@ -504,26 +544,33 @@ def create_jobs_blueprint(world_lock, jobs_cache, get_backend_adapter) -> Bluepr
                 existing_job = repo.get(job_id_uuid)
                 if existing_job is None:
                     return jsonify({"error": f"Job {job_id} not found"}), 404
-            
+
             # Validation: check for inconsistent is_active/target combination
             # If setting is_active=True, ensure target exists (either in update or existing)
             if "is_active" in updates_mem and updates_mem["is_active"]:
-                new_target = updates_mem.get("target") if "target" in updates_mem else existing_job.target
+                new_target = (
+                    updates_mem.get("target")
+                    if "target" in updates_mem
+                    else existing_job.target
+                )
                 if new_target is None:
-                    return jsonify({"error": "Cannot activate job without a target"}), 400
-                
+                    return (
+                        jsonify({"error": "Cannot activate job without a target"}),
+                        400,
+                    )
+
                 # Enforce one active job at a time: deactivate all other jobs
                 for other_job in jobs_cache.list:
                     if other_job.id != job_id_uuid and other_job.is_active:
                         other_job.is_active = False
                         repo.update_fields(other_job.id, is_active=0)
-            
+
             # Update in database (if it exists there)
             updated_job_db = repo.update_fields(job_id_uuid, **updates_db)
-            
+
             # Update in-memory job (if it exists there)
             job_mem = jobs_cache.get(job_id_uuid)
-            
+
             # If not in DB and not in memory, it's gone
             if updated_job_db is None and job_mem is None:
                 return jsonify({"error": f"Job {job_id} not found"}), 404
@@ -534,39 +581,46 @@ def create_jobs_blueprint(world_lock, jobs_cache, get_backend_adapter) -> Bluepr
                     setattr(job_mem, key, value)
                 # Sync updated_at
                 job_mem.updated_at = datetime.now(timezone.utc).timestamp()
-                
+
                 # --- CRITICAL: Sync drone count with world if this is the active job ---
                 if "drone_count" in updates_mem:
                     try:
                         new_count = int(updates_mem["drone_count"])
                         # Get current backend_adapter using the getter
                         backend_adapter = get_backend_adapter()
-                        
+
                         # Use the World's built-in method to resize drone array safely
-                        if hasattr(backend_adapter, 'set_drone_count'):
+                        if hasattr(backend_adapter, "set_drone_count"):
                             backend_adapter.set_drone_count(new_count)
-                            
+
                     except Exception as e:
                         print(f"Error updating drone count in world: {e}")
                         traceback.print_exc()
-                
+
                 # --- Metrics Management ---
                 # If job is becoming active/running, start metrics
-                if updates_mem.get("is_active") or updates_mem.get("status") == "running":
+                if (
+                    updates_mem.get("is_active")
+                    or updates_mem.get("status") == "running"
+                ):
                     from server.metrics import start_metrics_run, get_collector
+
                     if get_collector().get_current_run() is None:
                         start_metrics_run(str(job_id_uuid))
                         print(f"Started metrics collection for job {job_id_uuid}")
-                
+
                 # If job is stopping/completing, stop metrics
-                if updates_mem.get("is_active") is False or updates_mem.get("status") in ["completed", "cancelled"]:
+                if updates_mem.get("is_active") is False or updates_mem.get(
+                    "status"
+                ) in ["completed", "cancelled"]:
                     from server.metrics import end_metrics_run, get_collector
+
                     if get_collector().get_current_run() is not None:
                         end_metrics_run()
                         print(f"Stopped metrics collection for job {job_id_uuid}")
-                        
+
                 return jsonify(job_mem.to_dict()), 200
-            
+
             # If only in DB, return DB version
             return jsonify(updated_job_db.to_dict()), 200
 
@@ -583,12 +637,12 @@ def create_jobs_blueprint(world_lock, jobs_cache, get_backend_adapter) -> Bluepr
             # Check if job exists anywhere
             job_db = repo.get(job_id_uuid)
             job_mem = jobs_cache.get(job_id_uuid)
-            
+
             if job_db is None and job_mem is None:
                 return jsonify({"error": f"Job {job_id} not found"}), 404
-            
+
             job_to_return = job_mem if job_mem else job_db
-            
+
             # Delete from database
             repo.delete(job_id_uuid)
             # Delete from memory

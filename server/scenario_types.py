@@ -10,6 +10,7 @@ This module provides reusable scenario type definitions that bundle:
 Scenario types serve as templates for quickly creating scenarios with
 appropriate settings for different use cases.
 """
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
@@ -30,6 +31,7 @@ BOUNDS_PADDING = 5.0
 # Data Structures
 # -----------------------------------------------------------------------------
 
+
 @dataclass
 class ScenarioTypeDefinition:
     """
@@ -38,6 +40,7 @@ class ScenarioTypeDefinition:
     Provides defaults for world physics, policy behavior, and visual appearance
     that can be used as a starting point for new scenarios.
     """
+
     key: str
     name: str
     description: str
@@ -48,7 +51,9 @@ class ScenarioTypeDefinition:
 
     # Visual defaults
     default_theme_key: str = "default-herd"
-    default_icon_set: str = "herding"  # "herding" (sheep/drones) or "evacuation" (people/guides)
+    default_icon_set: str = (
+        "herding"  # "herding" (sheep/drones) or "evacuation" (people/guides)
+    )
 
     # Recommended entity counts
     recommended_agents: Optional[int] = None
@@ -87,7 +92,6 @@ SCENARIO_TYPES: Dict[str, ScenarioTypeDefinition] = {
         tags=["herding", "farm", "standard"],
         environment="farm",
     ),
-
     "evacuation_prototype": ScenarioTypeDefinition(
         key="evacuation_prototype",
         name="City Evacuation",
@@ -97,18 +101,18 @@ SCENARIO_TYPES: Dict[str, ScenarioTypeDefinition] = {
         ),
         default_world_config={
             "boundary": "reflect",
-            "k_nn": 1,           # Minimal flocking - people don't herd like sheep
-            "wa": 0.1,           # Very low attraction - people don't clump
-            "wr": 1.0,           # Moderate repulsion - personal space
-            "w_align": 0.2,      # Low alignment - people move independently
+            "k_nn": 1,  # Minimal flocking - people don't herd like sheep
+            "wa": 0.1,  # Very low attraction - people don't clump
+
+            "w_align": 0.2,  # Low alignment - people move independently
             "graze_alpha": 0.0,  # No random grazing
-            "vmax": 0.6,         # Realistic walking speed
-            "umax": 1.0,         # Moderate drone speed
-            "w_target": 8.0,     # Stronger attraction to goal
-            "wr": 0.5,           # Reduced repulsion for smoother flow
-            "ws": 10.0,          # Greatly reduced drone repulsion to prevent erratic movement
-            "ra": 2.0,           # Smaller agent radius for tighter packing
-            "sigma": 0.001,      # Reduced noise for less erratic movement
+            "vmax": 0.6,  # Realistic walking speed
+            "umax": 1.0,  # Moderate drone speed
+            "w_target": 8.0,  # Stronger attraction to goal
+            "wr": 0.5,  # Reduced repulsion for smoother flow
+            "ws": 10.0,  # Greatly reduced drone repulsion to prevent erratic movement
+            "ra": 2.0,  # Smaller agent radius for tighter packing
+            "sigma": 0.001,  # Reduced noise for less erratic movement
         },
         default_policy_config={
             "key": "evacuation-prototype",
@@ -120,21 +124,20 @@ SCENARIO_TYPES: Dict[str, ScenarioTypeDefinition] = {
         tags=["evacuation", "urban", "city", "research"],
         environment="city",
     ),
-
     "oil_spill_cleanup": ScenarioTypeDefinition(
         key="oil_spill_cleanup",
         name="Oil Spill Cleanup",
         description="Contain and clean up oil spills in the ocean using boom-equipped boats.",
         default_world_config={
             "boundary": "none",
-            "k_nn": 0,           # No flocking/alignment
-            "wa": 0.1,           # Minimal attraction - prevents clumping
-            "wr": 5.0,           # Low repulsion - oil can overlap slightly
-            "ws": 50.0,          # Strong response to boats
-            "wm": 0.0,           # No inertia
-            "vmax": 0.5,         # Slow movement
+            "k_nn": 0,  # No flocking/alignment
+            "wa": 0.1,  # Minimal attraction - prevents clumping
+            "wr": 5.0,  # Low repulsion - oil can overlap slightly
+            "ws": 50.0,  # Strong response to boats
+            "wm": 0.0,  # No inertia
+            "vmax": 0.5,  # Slow movement
             "graze_alpha": 0.0,  # No random wandering
-            "sigma": 0.0,        # No random noise
+            "sigma": 0.0,  # No random noise
         },
         default_policy_config={
             "key": "default",
@@ -152,6 +155,7 @@ SCENARIO_TYPES: Dict[str, ScenarioTypeDefinition] = {
 # -----------------------------------------------------------------------------
 # Public API
 # -----------------------------------------------------------------------------
+
 
 def get_scenario_type(key: str) -> Optional[ScenarioTypeDefinition]:
     """Get a scenario type by key."""
@@ -186,7 +190,11 @@ def generate_initial_layout(
     rng = np.random.default_rng(seed)
 
     n_agents = num_agents or scenario_type.recommended_agents or DEFAULT_AGENT_COUNT
-    n_controllers = num_controllers or scenario_type.recommended_controllers or DEFAULT_CONTROLLER_COUNT
+    n_controllers = (
+        num_controllers
+        or scenario_type.recommended_controllers
+        or DEFAULT_CONTROLLER_COUNT
+    )
 
     xmin, xmax, ymin, ymax = bounds
     width = xmax - xmin
@@ -200,24 +208,24 @@ def generate_initial_layout(
         n_clusters = min(4, max(2, n_agents // 30))
         agents_per_cluster = n_agents // n_clusters
         agent_groups = []
-        
+
         for _ in range(n_clusters):
             cx = rng.uniform(xmin + width * 0.2, xmax - width * 0.2)
             cy = rng.uniform(ymin + height * 0.2, ymax - height * 0.2)
             cluster = rng.normal(
                 loc=[cx, cy],
                 scale=[width * 0.08, height * 0.08],
-                size=(agents_per_cluster, 2)
+                size=(agents_per_cluster, 2),
             )
             agent_groups.append(cluster)
-        
+
         agents = np.vstack(agent_groups)[:n_agents]
     else:
         # Default: moderately clustered in center region
         agents = rng.uniform(
             low=[center_x - width * 0.25, center_y - height * 0.25],
             high=[center_x + width * 0.25, center_y + height * 0.25],
-            size=(n_agents, 2)
+            size=(n_agents, 2),
         )
 
     # Clip to bounds
@@ -233,11 +241,17 @@ def generate_initial_layout(
     controllers = np.zeros((n_controllers, 2))
     for i in range(n_controllers):
         angle = 2 * np.pi * i / n_controllers
-        controllers[i] = agent_center + controller_radius * np.array([np.cos(angle), np.sin(angle)])
+        controllers[i] = agent_center + controller_radius * np.array(
+            [np.cos(angle), np.sin(angle)]
+        )
 
     # Clip controllers to bounds
-    controllers[:, 0] = np.clip(controllers[:, 0], xmin + BOUNDS_PADDING, xmax - BOUNDS_PADDING)
-    controllers[:, 1] = np.clip(controllers[:, 1], ymin + BOUNDS_PADDING, ymax - BOUNDS_PADDING)
+    controllers[:, 0] = np.clip(
+        controllers[:, 0], xmin + BOUNDS_PADDING, xmax - BOUNDS_PADDING
+    )
+    controllers[:, 1] = np.clip(
+        controllers[:, 1], ymin + BOUNDS_PADDING, ymax - BOUNDS_PADDING
+    )
 
     # --- Generate Targets ---
     if scenario_type.key == "evacuation_prototype":
@@ -246,7 +260,7 @@ def generate_initial_layout(
         targets = [[center_x, center_y]]
 
     # --- Generate Obstacles ---
-    obstacles = []
+    obstacles: List[List[float]] = []
 
     return {
         "sheep": [[float(x), float(y)] for x, y in agents],

@@ -4,6 +4,7 @@ Scenarios API
 This module handles the creation, listing, retrieval, and persistence of scenarios.
 It supports both preset scenarios (in-memory) and custom scenarios (persisted to disk).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -13,11 +14,11 @@ import threading
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 from uuid import UUID, uuid4
 
 import numpy as np
-from flask import Blueprint, Response, jsonify, request
+from flask import Blueprint, jsonify, request
 
 from simulation.scenarios import (
     spawn_circle,
@@ -42,12 +43,14 @@ Visibility = Literal["private", "public", "preset"]
 # Data Structures
 # -----------------------------------------------------------------------------
 
+
 @dataclass
 class Scenario:
     """
     Represents a simulation scenario configuration.
     Contains all necessary data to initialize a world state.
     """
+
     # Identity & Metadata
     id: UUID
     name: str
@@ -55,56 +58,63 @@ class Scenario:
     tags: List[str]
     visibility: Visibility
     seed: Optional[int]
-    
+
     # Resolved Entities (Positions)
     sheep: List[Vec2]
     drones: List[Vec2]
     targets: List[Vec2]
-    
+
     # Passthrough fields (not strictly enforced here but used by simulation)
     obstacles: List[dict] = field(default_factory=list)
     goals: List[dict] = field(default_factory=list)
-    
+
     # World Parameters
     boundary: Literal["none", "wrap", "reflect"] = "none"
     bounds: Tuple[float, float, float, float] = (0.0, 250.0, 0.0, 250.0)
-    
+
     # Configuration fields for world/physics and policy behavior
     world_config: Optional[dict] = None  # World/physics parameter overrides
-    policy_config: Optional[dict] = None  # Policy configuration (preset key or custom dict)
+    policy_config: Optional[dict] = (
+        None  # Policy configuration (preset key or custom dict)
+    )
     target_sequence: Optional[List[Vec2]] = None  # Multi-waypoint goals
-    
+
     # Scenario type (behavior pack) reference
     scenario_type: Optional[str] = None  # Key from SCENARIO_TYPES registry
-    
+
     # Appearance/theme configuration
     appearance: Optional[dict] = None  # Contains themeKey and other visual settings
-    
+
     # Domain tag for future extensibility
     domain: Optional[str] = None  # "herding", "evacuation", etc.
-    
+
     # Environment (farm, city, ocean)
     environment: str = "farm"
 
     # Versioning
     version: int = 1
     schema_version: int = 1
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
+    updated_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
 
 # -----------------------------------------------------------------------------
 # Repository
 # -----------------------------------------------------------------------------
 
+
 class ScenarioRepo:
     """
     Repository for persisting and retrieving scenarios from PKL.
-    
+
     Every mutating method loads from disk, modifies, and saves back.
     Preset scenarios are kept in memory and merged with custom scenarios from disk.
     """
-    
+
     def __init__(self, cap: int = 500):
         self._lock = threading.RLock()
         self._presets: Dict[UUID, Scenario] = {}  # Preset scenarios (in-memory only)
@@ -148,7 +158,7 @@ class ScenarioRepo:
                 # Presets are stored in memory only
                 self._presets[s.id] = s
                 return s
-            
+
             # Load, add, and save custom scenarios
             scenarios = self._load_custom_scenarios()
             # Check if already exists (by ID)
@@ -190,9 +200,11 @@ class ScenarioRepo:
         def match(s: Scenario) -> bool:
             if q:
                 qq = q.lower()
-                if qq not in (s.name or "").lower() and \
-                   qq not in (s.description or "").lower() and \
-                   qq not in " ".join(s.tags).lower():
+                if (
+                    qq not in (s.name or "").lower()
+                    and qq not in (s.description or "").lower()
+                    and qq not in " ".join(s.tags).lower()
+                ):
                     return False
             if tag and tag not in s.tags:
                 return False
@@ -215,14 +227,14 @@ class ScenarioRepo:
         total = len(items)
         limit = max(1, min(100, int(limit)))
         offset = max(0, int(offset))
-        return items[offset: offset + limit], total
+        return items[offset : offset + limit], total
 
     def delete(self, sid: UUID) -> bool:
         """Delete a custom scenario by ID. Presets cannot be deleted."""
         with self._lock:
             if sid in self._presets:
                 return False  # Cannot delete presets
-            
+
             scenarios = self._load_custom_scenarios()
             original_len = len(scenarios)
             scenarios = [s for s in scenarios if s.id != sid]
@@ -239,6 +251,7 @@ class ScenarioRepo:
         with self._lock:
             return self._idem.get(key)
 
+
 # Global Repository Instance
 REPO = ScenarioRepo()
 
@@ -247,6 +260,7 @@ REPO = ScenarioRepo()
 # Preset Seeding
 # -----------------------------------------------------------------------------
 
+
 def _seed_presets():
     """Add default preset scenarios on startup."""
     presets = [
@@ -254,18 +268,49 @@ def _seed_presets():
         Scenario(
             id=uuid4(),
             name="City Evacuation - 40 People",
-            description="Urban evacuation at a city intersection: guide 40 people to the designated safe zone using coordinated drone robots",
+            description=(
+                "Urban evacuation at a city intersection: guide 40 people to the designated safe zone "
+                "using coordinated drone robots"
+            ),
             tags=["preset", "evacuation", "urban", "city", "intersection"],
             visibility="preset",
             seed=123,
-            sheep=[(float(x), float(y)) for x, y in spawn_uniform(40, (50, 200, 200, 240), seed=123).tolist()],
-            drones=[(30.0, 125.0), (220.0, 125.0), (125.0, 30.0)],  # Three drones surrounding
+            sheep=[
+                (float(x), float(y))
+                for x, y in spawn_uniform(40, (50, 200, 200, 240), seed=123).tolist()
+            ],
+            drones=[
+                (30.0, 125.0),
+                (220.0, 125.0),
+                (125.0, 30.0),
+            ],  # Three drones surrounding
             targets=[(125.0, 30.0)],  # Safe zone at the bottom
             # Accident in the intersection (central obstacle) + side debris
             obstacles=[
-                {"polygon": [[115.0, 115.0], [135.0, 115.0], [135.0, 135.0], [115.0, 135.0]]}, # Center (smaller)
-                {"polygon": [[30.0, 110.0], [50.0, 110.0], [50.0, 140.0], [30.0, 140.0]]},     # Left (shifted left)
-                {"polygon": [[200.0, 110.0], [220.0, 110.0], [220.0, 140.0], [200.0, 140.0]]}, # Right (shifted right)
+                {
+                    "polygon": [
+                        [115.0, 115.0],
+                        [135.0, 115.0],
+                        [135.0, 135.0],
+                        [115.0, 135.0],
+                    ]
+                },  # Center (smaller)
+                {
+                    "polygon": [
+                        [30.0, 110.0],
+                        [50.0, 110.0],
+                        [50.0, 140.0],
+                        [30.0, 140.0],
+                    ]
+                },  # Left (shifted left)
+                {
+                    "polygon": [
+                        [200.0, 110.0],
+                        [220.0, 110.0],
+                        [220.0, 140.0],
+                        [200.0, 140.0],
+                    ]
+                },  # Right (shifted right)
             ],
             boundary="reflect",
             bounds=(-250.0, 400.0, 0.0, 500.0),
@@ -281,7 +326,10 @@ def _seed_presets():
             tags=["preset", "default", "uniform", "small"],
             visibility="preset",
             seed=42,
-            sheep=[(float(x), float(y)) for x, y in spawn_uniform(50, (0, 200, 0, 200), seed=42).tolist()],
+            sheep=[
+                (float(x), float(y))
+                for x, y in spawn_uniform(50, (0, 200, 0, 200), seed=42).tolist()
+            ],
             drones=[(0.0, 0.0)],
             targets=[],  # No default target
             boundary="none",
@@ -295,7 +343,12 @@ def _seed_presets():
             tags=["preset", "large", "clusters", "challenge"],
             visibility="preset",
             seed=7,
-            sheep=[(float(x), float(y)) for x, y in spawn_clusters(200, 2, (0, 250, 0, 250), spread=3.5, seed=7).tolist()],
+            sheep=[
+                (float(x), float(y))
+                for x, y in spawn_clusters(
+                    200, 2, (0, 250, 0, 250), spread=3.5, seed=7
+                ).tolist()
+            ],
             drones=[(125.0, 125.0)],
             targets=[],  # No default target
             boundary="none",
@@ -309,7 +362,12 @@ def _seed_presets():
             tags=["preset", "corners", "medium", "challenge"],
             visibility="preset",
             seed=3,
-            sheep=[(float(x), float(y)) for x, y in spawn_corners(80, (0, 250, 0, 250), jitter=2.0, seed=3).tolist()],
+            sheep=[
+                (float(x), float(y))
+                for x, y in spawn_corners(
+                    80, (0, 250, 0, 250), jitter=2.0, seed=3
+                ).tolist()
+            ],
             drones=[(125.0, 125.0)],
             targets=[],  # No default target
             boundary="none",
@@ -323,7 +381,10 @@ def _seed_presets():
             tags=["preset", "line", "medium"],
             visibility="preset",
             seed=5,
-            sheep=[(float(x), float(y)) for x, y in spawn_line(60, (0, 250, 0, 250), seed=5).tolist()],
+            sheep=[
+                (float(x), float(y))
+                for x, y in spawn_line(60, (0, 250, 0, 250), seed=5).tolist()
+            ],
             drones=[(0.0, 0.0)],
             targets=[],  # No default target
             boundary="none",
@@ -338,7 +399,12 @@ def _seed_presets():
             tags=["preset", "oil", "ocean", "cleanup"],
             visibility="preset",
             seed=99,
-            sheep=[(float(x), float(y)) for x, y in spawn_clusters(100, 5, (0, 250, 0, 250), spread=20.0, seed=99).tolist()],
+            sheep=[
+                (float(x), float(y))
+                for x, y in spawn_clusters(
+                    100, 5, (0, 250, 0, 250), spread=20.0, seed=99
+                ).tolist()
+            ],
             drones=[(50.0, 50.0), (200.0, 50.0), (125.0, 200.0)],
             targets=[],
             boundary="none",
@@ -349,22 +415,26 @@ def _seed_presets():
             environment="ocean",
         ),
     ]
-    
+
     for preset in presets:
         REPO.add_preset(preset)
         print(f"✓ Created preset: {preset.name} ({len(preset.sheep)} sheep)")
+
 
 # Seed presets on module load
 _seed_presets()
 
 # Load persisted custom scenarios count
 _custom_count = len(REPO._load_custom_scenarios())
-print(f"Scenarios API ready with {len(REPO._presets)} presets + {_custom_count} custom scenarios")
+print(
+    f"Scenarios API ready with {len(REPO._presets)} presets + {_custom_count} custom scenarios"
+)
 
 
 # -----------------------------------------------------------------------------
 # Utilities
 # -----------------------------------------------------------------------------
+
 
 def _finite_pair(p) -> Vec2:
     if not isinstance(p, (list, tuple)) or len(p) != 2:
@@ -374,11 +444,16 @@ def _finite_pair(p) -> Vec2:
         raise ValueError("coordinate must be finite")
     return (x, y)
 
+
 def _normalize_points(pts) -> List[Vec2]:
     return [_finite_pair(p) for p in (pts or [])]
 
+
 def _hash_body(d: dict) -> str:
-    return hashlib.sha256(json.dumps(d, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return hashlib.sha256(
+        json.dumps(d, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
 
 def _round_pts(pts: List[Vec2], nd=9) -> List[Vec2]:
     return [(round(float(x), nd), round(float(y), nd)) for x, y in pts]
@@ -387,6 +462,7 @@ def _round_pts(pts: List[Vec2], nd=9) -> List[Vec2]:
 # -----------------------------------------------------------------------------
 # Spawn Dispatcher
 # -----------------------------------------------------------------------------
+
 
 def _spawn_entities(body: dict) -> Tuple[List[Vec2], List[Vec2], List[Vec2]]:
     """
@@ -431,7 +507,9 @@ def _spawn_entities(body: dict) -> Tuple[List[Vec2], List[Vec2], List[Vec2]]:
     elif kind == "clusters":
         k = int(spawn.get("k", 2))
         spread = float(spawn.get("spread", 3.5))
-        sheep_xy = spawn_clusters(N, k, (xmin, xmax, ymin, ymax), spread=spread, seed=seed)
+        sheep_xy = spawn_clusters(
+            N, k, (xmin, xmax, ymin, ymax), spread=spread, seed=seed
+        )
     elif kind == "corners":
         jitter = float(spawn.get("jitter", 2.0))
         sheep_xy = spawn_corners(N, (xmin, xmax, ymin, ymax), jitter=jitter, seed=seed)
@@ -439,7 +517,9 @@ def _spawn_entities(body: dict) -> Tuple[List[Vec2], List[Vec2], List[Vec2]]:
         y_fixed = spawn.get("y")
         sheep_xy = spawn_line(N, (xmin, xmax, ymin, ymax), seed=seed, y=y_fixed)
     elif kind == "circle":
-        center = _finite_pair(spawn.get("center", [(xmin+xmax)/2, (ymin+ymax)/2]))
+        center = _finite_pair(
+            spawn.get("center", [(xmin + xmax) / 2, (ymin + ymax) / 2])
+        )
         radius = float(spawn.get("radius", 5.0))
         sheep_xy = spawn_circle(N, center=center, radius=radius, seed=seed)
     else:
@@ -449,10 +529,10 @@ def _spawn_entities(body: dict) -> Tuple[List[Vec2], List[Vec2], List[Vec2]]:
 
     # Drones
     drones_in = spawn.get("drones") or []
-    drones: List[Vec2] = []
+    drones_list: List[Vec2] = []
     for d in drones_in:
         if "position" in d:
-            drones.append(_finite_pair(d["position"]))
+            drones_list.append(_finite_pair(d["position"]))
         elif "around" in d and "radius" in d:
             around = _finite_pair(d["around"])
             count = int(d.get("count", 1))
@@ -461,14 +541,14 @@ def _spawn_entities(body: dict) -> Tuple[List[Vec2], List[Vec2], List[Vec2]]:
             th = rng.random(count) * 2 * np.pi
             xs = around[0] + r * np.cos(th)
             ys = around[1] + r * np.sin(th)
-            drones.extend([(float(x), float(y)) for x, y in zip(xs, ys)])
+            drones_list.extend([(float(x), float(y)) for x, y in zip(xs, ys)])
         else:
             # fallback: center
-            drones.append(((xmin + xmax) / 2.0, (ymin + ymax) / 2.0))
+            drones_list.append(((xmin + xmax) / 2.0, (ymin + ymax) / 2.0))
 
     targets = _normalize_points(spawn.get("targets") or [])
 
-    return _round_pts(sheep), _round_pts(drones), _round_pts(targets)
+    return _round_pts(sheep), _round_pts(drones_list), _round_pts(targets)
 
 
 # -----------------------------------------------------------------------------
@@ -477,15 +557,29 @@ def _spawn_entities(body: dict) -> Tuple[List[Vec2], List[Vec2], List[Vec2]]:
 
 scenarios_bp = Blueprint("scenarios", __name__, url_prefix="/scenarios")
 
+
 @scenarios_bp.route("", methods=["POST"])
-def create_scenario() -> Response:
+def create_scenario() -> Any:
     try:
         body = request.get_json(force=True, silent=False) or {}
     except Exception:
-        return jsonify({"error": {"type": "BadRequest", "message": "Invalid JSON"}}), 400
+        return (
+            jsonify({"error": {"type": "BadRequest", "message": "Invalid JSON"}}),
+            400,
+        )
 
     if not isinstance(body, dict):
-        return jsonify({"error": {"type": "BadRequest", "message": "JSON body must be an object"}}), 400
+        return (
+            jsonify(
+                {
+                    "error": {
+                        "type": "BadRequest",
+                        "message": "JSON body must be an object",
+                    }
+                }
+            ),
+            400,
+        )
 
     idem_key = request.headers.get("Idempotency-Key")
     if idem_key:
@@ -493,25 +587,52 @@ def create_scenario() -> Response:
         if sid_existing:
             existing = REPO.get(sid_existing)
             if existing:
-                return jsonify(asdict(existing)), 201, {"Location": f"/scenarios/{existing.id}"}
+                return (
+                    jsonify(asdict(existing)),
+                    201,
+                    {"Location": f"/scenarios/{existing.id}"},
+                )
 
     name = str(body.get("name", "")).strip()
     if not name:
-        return jsonify({"error": {"type": "Validation", "message": "'name' is required"}}), 422
+        return (
+            jsonify({"error": {"type": "Validation", "message": "'name' is required"}}),
+            422,
+        )
 
     description = body.get("description")
     tags = [str(t).strip().lower() for t in (body.get("tags") or []) if str(t).strip()]
     visibility = body.get("visibility", "private")
     if visibility not in ("private", "public", "preset"):
-        return jsonify({"error": {"type": "Validation", "message": "invalid 'visibility'"}}), 422
+        return (
+            jsonify(
+                {"error": {"type": "Validation", "message": "invalid 'visibility'"}}
+            ),
+            422,
+        )
 
     w = body.get("world") or {}
     boundary = w.get("boundary", "none")
     if boundary not in ("none", "wrap", "reflect"):
-        return jsonify({"error": {"type": "Validation", "message": "invalid world.boundary"}}), 422
+        return (
+            jsonify(
+                {"error": {"type": "Validation", "message": "invalid world.boundary"}}
+            ),
+            422,
+        )
     bounds = tuple(w.get("bounds", (0.0, 250.0, 0.0, 250.0)))
     if len(bounds) != 4:
-        return jsonify({"error": {"type": "Validation", "message": "world.bounds must be [xmin,xmax,ymin,ymax]"}}), 422
+        return (
+            jsonify(
+                {
+                    "error": {
+                        "type": "Validation",
+                        "message": "world.bounds must be [xmin,xmax,ymin,ymax]",
+                    }
+                }
+            ),
+            422,
+        )
     seed = w.get("seed")
 
     try:
@@ -532,7 +653,7 @@ def create_scenario() -> Response:
         obstacles=body.get("obstacles") or [],
         goals=body.get("goals") or [],
         boundary=boundary,
-        bounds=tuple(map(float, bounds)),
+        bounds=(float(bounds[0]), float(bounds[1]), float(bounds[2]), float(bounds[3])),
         # Configuration fields
         world_config=body.get("world_config"),
         policy_config=body.get("policy_config"),
@@ -547,13 +668,19 @@ def create_scenario() -> Response:
 
     return jsonify(asdict(s)), 201, {"Location": f"/scenarios/{s.id}"}
 
+
 @scenarios_bp.route("", methods=["GET"])
-def list_scenarios() -> Response:
+def list_scenarios() -> Any:
     q = request.args.get("q")
     tag = request.args.get("tag")
     visibility = request.args.get("visibility")
     if visibility not in (None, "private", "public", "preset"):
-        return jsonify({"error": {"type": "Validation", "message": "invalid 'visibility'"}}), 422
+        return (
+            jsonify(
+                {"error": {"type": "Validation", "message": "invalid 'visibility'"}}
+            ),
+            422,
+        )
 
     created_after = request.args.get("created_after")
     created_before = request.args.get("created_before")
@@ -572,16 +699,25 @@ def list_scenarios() -> Response:
         offset=offset,
     )
 
-    return jsonify({
-        "items": [asdict(s) for s in items],
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-    }), 200
+    return (
+        jsonify(
+            {
+                "items": [asdict(s) for s in items],
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+            }
+        ),
+        200,
+    )
+
 
 @scenarios_bp.route("/<uuid:sid>", methods=["GET"])
-def get_scenario(sid: UUID) -> Response:
+def get_scenario(sid: UUID) -> Any:
     s = REPO.get(sid)
     if not s:
-        return jsonify({"error": {"type": "NotFound", "message": "scenario not found"}}), 404
+        return (
+            jsonify({"error": {"type": "NotFound", "message": "scenario not found"}}),
+            404,
+        )
     return jsonify(asdict(s)), 200

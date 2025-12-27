@@ -5,7 +5,14 @@ There is a suite of tests written in pytest to evaluate the end-to-end behavior 
 
 ## Backend
 
-First, run `pip install -r requirements.txt` to install the necessary python packages. Then, the backend can be executed via `python ./server/main.py`.
+First, it is recommended to create and activate a virtual environment:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+Then, run `pip install -r requirements.txt` to install the necessary python packages. The backend can be executed via `python ./server/main.py`.
 
 A variety of tests for the backend are available, which can be executed by
 

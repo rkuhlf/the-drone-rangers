@@ -4,11 +4,13 @@ Metrics & Evaluation System
 This module provides lightweight metrics collection for simulation runs,
 enabling performance analysis and evaluation without impacting simulation speed.
 """
+
 from __future__ import annotations
 
 import time
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
+
 
 import numpy as np
 
@@ -26,15 +28,17 @@ EPSILON = 1e-6
 # Data Structures
 # -----------------------------------------------------------------------------
 
+
 @dataclass
 class StepMetrics:
     """Metrics captured at each simulation step."""
-    t: float                      # Simulation time
-    fraction_in_goal: float       # Fraction of agents within goal region
-    spread_radius: float          # Max distance from agent GCM (flock spread)
+
+    t: float  # Simulation time
+    fraction_in_goal: float  # Fraction of agents within goal region
+    spread_radius: float  # Max distance from agent GCM (flock spread)
     min_obstacle_distance: float  # Min distance from any agent to obstacles
-    cohesiveness: float           # Cohesiveness metric (fN / max_radius)
-    gcm_to_goal_distance: float   # Distance from GCM to goal
+    cohesiveness: float  # Cohesiveness metric (fN / max_radius)
+    gcm_to_goal_distance: float  # Distance from GCM to goal
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -47,6 +51,7 @@ class RunMetrics:
 
     Captures step-level data and summary statistics.
     """
+
     run_id: str
     started_at: float = field(default_factory=time.time)
     ended_at: Optional[float] = None
@@ -96,21 +101,22 @@ class RunMetrics:
             "time_to_reach_fraction_90": time_to_threshold(fractions, 0.9),
             "time_to_reach_fraction_95": time_to_threshold(fractions, 0.95),
             "final_fraction_in_goal": fractions[-1] if fractions else 0,
-
             # Spread/cohesion metrics
             "max_spread_radius": max(spreads) if spreads else 0,
             "min_spread_radius": min(spreads) if spreads else 0,
             "avg_spread_radius": sum(spreads) / len(spreads) if spreads else 0,
-            "avg_cohesiveness": sum(cohesiveness) / len(cohesiveness) if cohesiveness else 0,
-
+            "avg_cohesiveness": (
+                sum(cohesiveness) / len(cohesiveness) if cohesiveness else 0
+            ),
             # Goal approach metrics
             "initial_gcm_to_goal": gcm_distances[0] if gcm_distances else 0,
             "final_gcm_to_goal": gcm_distances[-1] if gcm_distances else 0,
-
             # Run info
             "num_steps": len(self.steps),
             "total_simulation_time": times[-1] if times else 0,
-            "wall_clock_duration": (self.ended_at - self.started_at) if self.ended_at else None,
+            "wall_clock_duration": (
+                (self.ended_at - self.started_at) if self.ended_at else None
+            ),
         }
 
     def to_dict(self) -> Dict[str, Any]:
@@ -119,7 +125,9 @@ class RunMetrics:
             "started_at": self.started_at,
             "ended_at": self.ended_at,
             "summary": self.summary,
-            "steps": [s.to_dict() for s in self.steps[-STEPS_TO_KEEP_HEAD:]],  # Last 100 steps only in API
+            "steps": [
+                s.to_dict() for s in self.steps[-STEPS_TO_KEEP_HEAD:]
+            ],  # Last 100 steps only in API
             "num_steps_total": len(self.steps),
         }
 
@@ -127,6 +135,7 @@ class RunMetrics:
 # -----------------------------------------------------------------------------
 # Metrics Collector
 # -----------------------------------------------------------------------------
+
 
 class MetricsCollector:
     """
@@ -207,14 +216,20 @@ class MetricsCollector:
 
         if target is not None:
             from planning import state
+
             if isinstance(target, state.Circle):
                 # Distance from each agent to goal center
-                distances_to_goal = np.linalg.norm(flock - np.array(target.center), axis=1)
-                fraction_in_goal = float(np.sum(distances_to_goal <= target.radius) / len(flock))
+                distances_to_goal = np.linalg.norm(
+                    flock - np.array(target.center), axis=1
+                )
+                fraction_in_goal = float(
+                    np.sum(distances_to_goal <= target.radius) / len(flock)
+                )
                 gcm_to_goal = float(np.linalg.norm(gcm - np.array(target.center)))
             elif isinstance(target, state.Polygon):
                 # For polygons, use point-in-polygon check
                 from planning.herding.utils import points_inside_polygon
+
                 inside = points_inside_polygon(flock, target.points)
                 fraction_in_goal = float(np.sum(inside) / len(flock))
                 # Use centroid for distance

@@ -5,6 +5,7 @@ This module handles the creation, listing, and deletion of drones in the simulat
 It maintains a persistent store of drone configurations (make/model) and synchronizes
 the simulation state when drones are added or removed.
 """
+
 import os
 import pathlib
 import re
@@ -29,6 +30,7 @@ DB_PATH = os.path.join(TMP_DIRECTORY, "drones.sqlite3")
 # Database Helpers
 # -----------------------------------------------------------------------------
 
+
 def _get_db_connection() -> sqlite3.Connection:
     """Create a connection to the SQLite database."""
     conn = sqlite3.connect(DB_PATH)
@@ -51,14 +53,15 @@ def _generate_next_drone_id(conn: sqlite3.Connection) -> str:
 # Blueprint Factory
 # -----------------------------------------------------------------------------
 
+
 def create_drones_blueprint(W: world.World) -> Blueprint:
     """
     Factory to create a drones blueprint with a dependency on the World instance.
-    
+
     Args:
         W: The World instance to synchronize drone state with.
     """
-    
+
     # Initialize database
     conn = _get_db_connection()
     try:
@@ -72,14 +75,13 @@ def create_drones_blueprint(W: world.World) -> Blueprint:
             """
         )
         conn.commit()
-        
+
         # Sync world state with database: initialize drone positions
         rows = conn.execute("SELECT id FROM drones").fetchall()
         # Random positions for existing drones
         W.drones = np.random.rand(len(rows), 2) * 5
     finally:
         conn.close()
-        
 
     drones_bp = Blueprint("drones", __name__)
 
@@ -88,7 +90,9 @@ def create_drones_blueprint(W: world.World) -> Blueprint:
         """List all registered drones."""
         conn = _get_db_connection()
         try:
-            rows = conn.execute("SELECT id, make, model FROM drones ORDER BY id").fetchall()
+            rows = conn.execute(
+                "SELECT id, make, model FROM drones ORDER BY id"
+            ).fetchall()
             items = [dict(row) for row in rows]
             return jsonify({"items": items, "total": len(items)}), 200
         finally:
@@ -100,7 +104,7 @@ def create_drones_blueprint(W: world.World) -> Blueprint:
         data = request.get_json(silent=True) or {}
         make = (data.get("make") or "").strip()
         model = (data.get("model") or "").strip()
-        
+
         if not make or not model:
             return jsonify({"error": "'make' and 'model' are required"}), 400
 
@@ -112,16 +116,16 @@ def create_drones_blueprint(W: world.World) -> Blueprint:
                 (drone_id, make, model),
             )
             conn.commit()
-            
+
             # Sync with simulation: Add a new drone
             # TODO: Do something a little bit smarter with tracking the ID drone-by-drone.
             # Currently just appending a random position
             W.drones = np.concatenate([W.drones, np.random.randint(0, 6, size=(1, 2))])
-            
+
             return jsonify({"id": drone_id, "make": make, "model": model}), 201
         finally:
             conn.close()
-            
+
     @drones_bp.route("/drones/<drone_id>", methods=["DELETE"])
     def delete_drone(drone_id: str):
         """Delete a drone by ID."""

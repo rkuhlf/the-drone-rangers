@@ -30,12 +30,12 @@ if df.empty:
 # ------------------------------------------------------------------
 agg = (
     df.groupby("k_nn", as_index=False)
-      .agg(
-          mean_success=("Success", "mean"),
-          std_success=("Success", "std"),
-          trials=("Success", "count")
-      )
-      .sort_values("k_nn")
+    .agg(
+        mean_success=("Success", "mean"),
+        std_success=("Success", "std"),
+        trials=("Success", "count"),
+    )
+    .sort_values("k_nn")
 )
 
 # ------------------------------------------------------------------
@@ -47,11 +47,11 @@ agg = (
 fig, ax = plt.subplots(figsize=FIG_SIZE)
 
 # Compute 95% CI for a binomial proportion
-p = agg["mean_success"].values          # in [0,1]
+p = agg["mean_success"].values  # in [0,1]
 n = agg["trials"].values.astype(float)
 
-se = np.sqrt(p * (1 - p) / n)           # standard error
-z = 1.96                                # ~95% CI
+se = np.sqrt(p * (1 - p) / n)  # standard error
+z = 1.96  # ~95% CI
 lower = np.clip(p - z * se, 0.0, 1.0)
 upper = np.clip(p + z * se, 0.0, 1.0)
 
@@ -78,7 +78,7 @@ ax.fill_between(
 ax.set_xlabel("Number of nearest neighbors (k)")
 ax.set_ylabel("Completion rate (%)")
 ax.set_ylim(0, 105)
-ax.set_xticks(agg["k_nn"])              # integer ticks at your k values
+ax.set_xticks(agg["k_nn"])  # integer ticks at your k values
 ax.set_title("Completion Rate vs Local Neighborhood Size\n(N = 500, 3 drones)")
 
 ax.grid(alpha=0.25)

@@ -4,6 +4,7 @@ Flyover Comparison Visualization
 This script visualizes the performance comparison between flyover (conditional repulsion)
 and non-flyover herding strategies, plotting completion steps against flock size.
 """
+
 import os
 import sys
 
@@ -32,7 +33,7 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Error reading CSV: {e}")
         sys.exit(1)
-    
+
     # Group by spawn type (e.g., uniform, circle)
     for spawn_type, group_data in df.groupby("spawn_type"):
         # Separate data based on repulsion strategy
@@ -44,43 +45,43 @@ if __name__ == "__main__":
         # 1. Scatter Plots
         if not fly_overs.empty:
             fly_overs.plot.scatter(
-                x="N", 
-                y="Completion Steps", 
-                color=COLORS["flyover"], 
-                label="Flyover", 
+                x="N",
+                y="Completion Steps",
+                color=COLORS["flyover"],
+                label="Flyover",
                 ax=ax,
-                alpha=0.6
+                alpha=0.6,
             )
 
         if not nonfly_overs.empty:
             nonfly_overs.plot.scatter(
-                x="N", 
-                y="Completion Steps", 
-                color=COLORS["non_flyover"], 
-                label="Non-Flyover", 
+                x="N",
+                y="Completion Steps",
+                color=COLORS["non_flyover"],
+                label="Non-Flyover",
                 ax=ax,
-                alpha=0.6
+                alpha=0.6,
             )
 
         # 2. Mean Trend Lines
         if not fly_overs.empty:
             fly_means = fly_overs.groupby("N")["Completion Steps"].mean()
             ax.plot(
-                fly_means.index, 
-                fly_means.values, 
-                color=COLORS["flyover"], 
-                linestyle="--", 
-                label="Flyover Mean"
+                fly_means.index,
+                fly_means.values,
+                color=COLORS["flyover"],
+                linestyle="--",
+                label="Flyover Mean",
             )
 
         if not nonfly_overs.empty:
             nonfly_means = nonfly_overs.groupby("N")["Completion Steps"].mean()
             ax.plot(
-                nonfly_means.index, 
-                nonfly_means.values, 
-                color=COLORS["non_flyover"], 
-                linestyle="--", 
-                label="Non-Flyover Mean"
+                nonfly_means.index,
+                nonfly_means.values,
+                color=COLORS["non_flyover"],
+                linestyle="--",
+                label="Non-Flyover Mean",
             )
 
         # Formatting
@@ -88,6 +89,6 @@ if __name__ == "__main__":
         ax.set_xlabel("Number of Agents (N)")
         ax.set_ylabel("Completion Steps")
         ax.legend()
-        ax.grid(True, linestyle=':', alpha=0.6)
+        ax.grid(True, linestyle=":", alpha=0.6)
 
     plt.show()

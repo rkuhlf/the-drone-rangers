@@ -5,7 +5,8 @@ Analyzes simulation results to visualize the relationship between the number of 
 and the number of nearest neighbors (k-NN) on the success rate of shepherding.
 Generates a heatmap and overlays theoretical guide curves.
 """
-import glob
+
+
 import os
 import sys
 from typing import List
@@ -20,9 +21,7 @@ import pandas as pd
 
 # List of CSV files to process.
 # Can be populated manually or via glob patterns.
-CSV_PATHS = [
-    "./planning/results/3_drones_2000_steps.csv"
-]
+CSV_PATHS = ["./planning/results/3_drones_2000_steps.csv"]
 
 # Plot settings
 FIG_SIZE = (10, 5.5)
@@ -35,6 +34,7 @@ Y_LIMIT = (0, 150)
 # Data Loading & Processing
 # -----------------------------------------------------------------------------
 
+
 def load_and_process_data(paths: List[str]) -> pd.DataFrame:
     """Load CSVs, normalize data, and aggregate into a single DataFrame."""
     dfs = []
@@ -42,7 +42,7 @@ def load_and_process_data(paths: List[str]) -> pd.DataFrame:
         if not os.path.exists(p):
             print(f"Warning: File not found: {p}")
             continue
-            
+
         try:
             df = pd.read_csv(p)
         except Exception as e:
@@ -51,35 +51,38 @@ def load_and_process_data(paths: List[str]) -> pd.DataFrame:
 
         # Normalize Success to 0/1
         if df["Success"].dtype != np.number:
-            df["Success"] = df["Success"].astype(str).str.lower().map({"true": 1, "false": 0})
-        
+            df["Success"] = (
+                df["Success"].astype(str).str.lower().map({"true": 1, "false": 0})
+            )
+
         # Ensure N and k_nn are ints for grouping stability
         if "N" in df.columns:
             df["N"] = df["N"].astype(int)
         if "k_nn" in df.columns:
             df["k_nn"] = df["k_nn"].astype(int)
-        
+
         # Synthesize seed if missing
         if "seed" not in df.columns:
             df["seed"] = np.arange(len(df))
-            
+
         dfs.append(df)
 
     if not dfs:
         return pd.DataFrame()
 
     all_df = pd.concat(dfs, ignore_index=True)
-    
+
     # Deduplicate: keep first occurrence of (N, k_nn, seed)
     if {"N", "k_nn", "seed"}.issubset(all_df.columns):
         all_df = all_df.drop_duplicates(subset=["N", "k_nn", "seed"])
-        
+
     return all_df
 
 
 # -----------------------------------------------------------------------------
 # Plotting
 # -----------------------------------------------------------------------------
+
 
 def plot_results(df: pd.DataFrame):
     """Generate and display the success rate plot."""
@@ -88,9 +91,9 @@ def plot_results(df: pd.DataFrame):
         return
 
     # Aggregate success rate per (N, k_nn)
-    agg = (df.groupby(["N", "k_nn"], as_index=False)
-             .agg(success_rate=("Success", "mean"),
-                  trials=("Success", "size")))
+    agg = df.groupby(["N", "k_nn"], as_index=False).agg(
+        success_rate=("Success", "mean"), trials=("Success", "size")
+    )
 
     # Keep only valid combos
     agg = agg[agg["k_nn"] < agg["N"]]
@@ -109,14 +112,14 @@ def plot_results(df: pd.DataFrame):
         cmap=CMAP,
         vmin=0.0,
         vmax=1.0,
-        s=55,           # marker size; tweak to taste
-        marker="s",     # square markers look like pixels
-        edgecolors="none"
+        s=55,  # marker size; tweak to taste
+        marker="s",  # square markers look like pixels
+        edgecolors="none",
     )
 
     # Guide curves
     N_line = np.linspace(1, 150, 500)
-    ax.plot(N_line, 0.53 * N_line, "k-",  lw=2, zorder=3, label="n = 0.53N")
+    ax.plot(N_line, 0.53 * N_line, "k-", lw=2, zorder=3, label="n = 0.53N")
     ax.plot(N_line, 3.0 * np.log(N_line), "k--", lw=2, zorder=3, label="n = 3log(N)")
 
     # Axes & limits
@@ -134,7 +137,7 @@ def plot_results(df: pd.DataFrame):
 
     ax.legend(loc="upper left")
     plt.title("Proportion of Herding Tasks Completed")
-    
+
     plt.tight_layout()
     plt.show()
 
@@ -150,10 +153,10 @@ def plot_results(df: pd.DataFrame):
 if __name__ == "__main__":
     print("Loading data...")
     data = load_and_process_data(CSV_PATHS)
-    
+
     if data.empty:
         print("No valid data found in the specified CSV files.")
         sys.exit(1)
-        
+
     print(f"Loaded {len(data)} records.")
     plot_results(data)
