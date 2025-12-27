@@ -40,7 +40,8 @@ BASE_CONFIG = {
     "dt": 1,
 }
 
-SPAWN_BOUNDS = (0.0, 250.0, 0.0, 250.0)
+SPAWN_BOUNDS = (0.0, 2000.0, 0.0, 2000.0)
+RENDER_BOUNDS = (-20, 2020.0, -20.0, 2020.0)
 RESULTS_DIR = "./planning/results"
 
 
@@ -126,7 +127,7 @@ def run_one_trial(
     )]
     
     if visualize:
-        renderer = Renderer(W, bounds=(-20, 500.0, -20.0, 500.0))
+        renderer = Renderer(W, bounds=RENDER_BOUNDS)
 
     # Main simulation loop for this trial
     for t in range(config["max_steps"]):
@@ -173,7 +174,7 @@ if __name__ == "__main__":
     # The default is kNN = 19.
     kNN_values = list(range(19, 20))
     spawn_types = ["uniform"]
-    seeds = range(25)
+    seeds = range(10)
     flyovers = [True]
     drone_xy_configs = [
         np.array([[0.0, 0.0],
