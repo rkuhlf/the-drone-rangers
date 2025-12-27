@@ -219,35 +219,6 @@ class World:
         """Get current polygon obstacles."""
         return [p.copy() for p in self.polys]
 
-    # -------------------------------------------------------------------------
-    # Domain-Neutral Accessors
-    # -------------------------------------------------------------------------
-
-    @property
-    def agents_xy(self) -> np.ndarray:
-        """Get agent positions (domain-neutral accessor)."""
-        return self.sheep_xy
-
-    @property
-    def sheep_xy(self) -> np.ndarray:
-        """Get sheep positions (herding-specific accessor)."""
-        return self.P
-
-    @property
-    def controllers_xy(self) -> np.ndarray:
-        """Get controller positions (domain-neutral accessor)."""
-        return self.shepherd_xy
-
-    @property
-    def shepherd_xy(self) -> np.ndarray:
-        """Get shepherd/drone positions (herding-specific accessor)."""
-        return self.drones
-
-    @property
-    def num_agents(self) -> int:
-        """Get number of agents."""
-        return self.N
-
     @property
     def num_controllers(self) -> int:
         """Get number of controllers."""
