@@ -77,17 +77,12 @@ class World:
         # Boundaries
         boundary: str = "none",
         bounds: tuple[float, float, float, float] = DEFAULT_BOUNDS,
-        restitution: float = 0.85,
         # Obstacles
         obstacles_polygons: list[np.ndarray] | None = None,
         obstacle_influence: float = 15.0,
-        w_obs: float = 10.0,
         w_tan: float = 12.0,
         keep_out: float = 8.0,
         world_keep_out: float = 8.0,
-        wall_follow_boost: float = 6.0,
-        stuck_speed_ratio: float = 0.08,
-        near_wall_ratio: float = 0.8,
         # Initialization
         seed: int = 0,
         flock_init: float = 0.0,  # Initial flocking level (0=grazing, 1=flocking)
@@ -95,6 +90,7 @@ class World:
         r_attr: float = 30.0,  # Attraction radius for local center of mass
         enforce_keepout: bool = True,
         use_neighbor_cache: bool | None = None,
+        # TODO: Remove this _kw_ignore we just shouldn't pass things if they aren't relevant.
         **_kw_ignore,
     ):
         self.N = sheep_xy.shape[0]
@@ -143,17 +139,12 @@ class World:
         # Boundaries
         self.boundary = boundary
         self.xmin, self.xmax, self.ymin, self.ymax = bounds
-        self.restitution = float(np.clip(restitution, 0.0, 1.0))
 
         # Obstacle parameters
         self.obstacle_influence = obstacle_influence
-        self.w_obs = w_obs
         self.w_tan = w_tan
         self.keep_out = keep_out
         self.world_keep_out = world_keep_out
-        self.wall_follow_boost = wall_follow_boost
-        self.stuck_speed_ratio = stuck_speed_ratio
-        self.near_wall_ratio = near_wall_ratio
 
         self.graze_p = graze_p
 
@@ -510,45 +501,7 @@ class World:
         neg = v_into < 0.0
 
         if np.any(neg):
-            self.V[mask][neg] -= (
-                (1.0 + self.restitution) * v_into[neg, None] * n_unit[neg]
-            )
-            self.V[mask][neg] += 0.5 * correction_velocity[neg]
-
-        pos_mask = ~neg
-        if np.any(pos_mask):
-            self.V[mask][pos_mask] += 0.3 * correction_velocity[pos_mask]
-
-        correction_info = np.zeros((self.N, 2))
-        correction_info[mask] = correction_vec
-        return correction_info, mask
-
-    def _resolve_world_keepout(self):
-        """Push agents away from world walls with capped correction."""
-        d_wall, n_wall = self._rect_signed_distance(self.P)
-        penetration = self.world_keep_out - d_wall
-        mask = penetration > 0.0
-        if not np.any(mask):
-            return np.zeros((self.N, 2)), np.zeros(self.N, dtype=bool)
-
-        max_corr_base = 0.25 * (self.vmax * self.dt)
-        max_corr = np.where(
-            penetration[mask] > 2 * max_corr_base, 2 * max_corr_base, max_corr_base
-        )
-        corr = np.minimum(penetration[mask], max_corr)
-
-        correction_vec = corr[:, None] * n_wall[mask]
-        self.P[mask] += correction_vec
-
-        correction_velocity = correction_vec / (self.dt + 1e-12)
-
-        v_into = np.sum(self.V[mask] * n_wall[mask], axis=1)
-        neg = v_into < 0.0
-
-        if np.any(neg):
-            self.V[mask][neg] -= (
-                (1.0 + self.restitution) * v_into[neg, None] * n_wall[mask][neg]
-            )
+            self.V[mask][neg] -= v_into[neg, None] * n_unit[neg]
             self.V[mask][neg] += 0.5 * correction_velocity[neg]
 
         pos_mask = ~neg
@@ -563,11 +516,9 @@ class World:
         """Enforce all keep-out constraints with conflict resolution."""
         poly_corr, poly_mask = self._resolve_polygon_penetration()
 
-        if self.boundary == "none":
-            wall_corr = np.zeros((self.N, 2))
-            wall_mask = np.zeros(self.N, dtype=bool)
-        else:
-            wall_corr, wall_mask = self._resolve_world_keepout()
+        # NOTE: There's some redundancy here from when I removed the world keepout.
+        wall_corr = np.zeros((self.N, 2))
+        wall_mask = np.zeros(self.N, dtype=bool)
 
         conflict_mask = poly_mask & wall_mask
         if np.any(conflict_mask):
@@ -717,25 +668,26 @@ class World:
         # Reflection boundaries
         P_before = P.copy()
 
+        # NOTE: This function has a bunch of redundant stuff from when I removed restitution.
         m = P[:, 0] < self.xmin
         if np.any(m):
             P[m, 0] = self.xmin + (self.xmin - P[m, 0])
-            V[m, 0] = np.abs(V[m, 0]) * self.restitution
+            V[m, 0] = 0
 
         m = P[:, 0] > self.xmax
         if np.any(m):
             P[m, 0] = self.xmax - (P[m, 0] - self.xmax)
-            V[m, 0] = -np.abs(V[m, 0]) * self.restitution
+            V[m, 0] = 0
 
         m = P[:, 1] < self.ymin
         if np.any(m):
             P[m, 1] = self.ymin + (self.ymin - P[m, 1])
-            V[m, 1] = np.abs(V[m, 1]) * self.restitution
+            V[m, 1] = 0
 
         m = P[:, 1] > self.ymax
         if np.any(m):
             P[m, 1] = self.ymax - (P[m, 1] - self.ymax)
-            V[m, 1] = -np.abs(V[m, 1]) * self.restitution
+            V[m, 1] = 0
 
         displacement = P - P_before
         correction_velocity = displacement / (self.dt + 1e-12)
@@ -844,8 +796,6 @@ class World:
 
     def _handle_far_sheep(self, G: np.ndarray) -> np.ndarray:
         """Handle sheep that are far from the drone (grazing behavior)."""
-        decay = 0.80
-
         V_new = np.zeros((self.N, 2))
         for i in range(self.N):
             H = self.wr * self._repel_close_vec(i)
@@ -865,8 +815,6 @@ class World:
 
             if np.dot(H, nrm_f) < 0.0:
                 H += self.w_tan * tng_f
-
-            H += (0.5 * self.w_obs) * nrm_f
             
             if np.random.uniform(0, 1) < self.graze_p:
                 noise = self.sigma * self.rng.normal(size=2)
@@ -884,8 +832,7 @@ class World:
             if Hn > 0:
                 h = H / Hn
 
-            v_des = self.vmax * h
-            v_new = decay * self.V[i] + (1.0 - decay) * v_des
+            v_new = self.vmax * h
             sp = np.linalg.norm(v_new)
             if sp > self.vmax:
                 v_new *= self.vmax / sp
@@ -956,7 +903,6 @@ class World:
                     T = T_vec / dist_t
                     H += self.w_target * T
 
-            H += self.w_obs * nrm[i]
             if np.dot(tng[i], tng[i]) > 0.0 and np.dot(H, nrm[i]) < 0.0:
                 H += self.w_tan * tng[i]
 
